@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { createTicket, resolveTicket, getMyTickets, getAllTickets, assignTicket } = require('../controllers/ticketController');
+const { createTicket, resolveTicket, getMyTickets, getAllTickets, assignTicket, getAssignedTickets, updateTicketStatus } = require('../controllers/ticketController');
 const { protect, authorize } = require('../middlewares/authMiddleware');
 
 router.post('/', protect, authorize('Student', 'Faculty'), createTicket);
@@ -20,5 +20,8 @@ router.put('/:id/resolve', protect, authorize('DepartmentStaff', 'AO'), resolveT
 
 router.get('/all', protect, authorize('AO'), getAllTickets);
 router.put('/:id/assign', protect, authorize('AO'), assignTicket);
+
+router.get('/assigned', protect, authorize('DepartmentStaff'), getAssignedTickets);
+router.put('/:id/status', protect, authorize('DepartmentStaff', 'AO'), updateTicketStatus);
 
 module.exports = router;

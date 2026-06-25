@@ -89,9 +89,17 @@ const LoginPage = () => {
 
   // Navigation Logic based on Role
   const routeUser = (role) => {
-    if (role === 'AO') navigate('/ao-dashboard');
-    else if (role === 'Faculty') navigate('/faculty-dashboard');
-    else navigate('/student-dashboard');
+    if (role === 'AO') {
+      navigate('/ao-dashboard');
+    } else if (role === 'DepartmentStaff') {
+      // 🔥 NEW: Route added for Department Staff
+      navigate('/staff-dashboard');
+    } else if (role === 'Faculty') {
+      navigate('/faculty-dashboard');
+    } else {
+      // Default to Student Dashboard
+      navigate('/student-dashboard');
+    }
   };
 
   return (
@@ -134,7 +142,7 @@ const LoginPage = () => {
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="relative">
               <Mail className="absolute left-3 top-3 text-slate-400" size={20} />
-              <input type="email" name="email" value={formData.email} onChange={handleChange} required placeholder="University Email"
+              <input type="email" name="email" value={formData.email} onChange={handleChange} required placeholder="Email Address"
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg py-3 pl-10 pr-4 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all placeholder:text-slate-500" />
             </div>
             <div className="relative">

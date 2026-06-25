@@ -137,8 +137,8 @@ const addStaff = async (req, res) => {
 
         // Mail bhej do background mein
         transporter.sendMail(mailOptions, (error, info) => {
-            if (error) console.log("Email bhejne mein error:", error);
-            else console.log("Email chali gayi:", info.response);
+            if (error) console.log("Problem while sending email:", error);
+            else console.log("Email Send successful:", info.response);
         });
 
         res.status(201).json({ success: true, message: 'Staff member created & Email sent!' });

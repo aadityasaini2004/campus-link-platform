@@ -24,16 +24,17 @@ const AODashboard = () => {
   const [loading, setLoading] = useState(true);
   const [selectedTicket, setSelectedTicket] = useState(null); // For Ticket Details Modal
 
-  // 🔥 NAYA: Add Staff Modal States
+  // --- Add Staff Modal States ---
   const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
   const [staffForm, setStaffForm] = useState({ name: "", email: "" });
   const [staffLoading, setStaffLoading] = useState(false);
   const [staffMessage, setStaffMessage] = useState({ type: "", text: "" });
 
+  const [staffList, setStaffList] = useState([]);
+  const [selectedStaffId, setSelectedStaffId] = useState(""); // 🔥 NAYA: For Assigning Ticket
+
   const userName = localStorage.getItem("userName") || "AO Admin";
   const initial = userName.charAt(0).toUpperCase();
-
-  const [staffList, setStaffList] = useState([]);
 
   // --- Security Check ---
   useEffect(() => {
@@ -44,7 +45,7 @@ const AODashboard = () => {
     }
   }, [navigate]);
 
-  // --- Fetch Tickets ---
+  // --- Fetch Tickets & Staff List ---
   useEffect(() => {
     const fetchRealData = async () => {
       try {
@@ -54,14 +55,14 @@ const AODashboard = () => {
         // 1. Fetch Tickets
         const { data: ticketsData } = await axios.get(
           "http://localhost:5000/api/tickets/all",
-          config,
+          config
         );
         setTickets(ticketsData);
 
-        // 2. 🔥 Fetch Staff List for Dropdown
+        // 2. Fetch Staff List for Dropdown
         const { data: staffData } = await axios.get(
           "http://localhost:5000/api/ao/staff-list",
-          config,
+          config
         );
         setStaffList(staffData);
       } catch (error) {
@@ -78,7 +79,7 @@ const AODashboard = () => {
     navigate("/login");
   };
 
-  // --- 🔥 NAYA: Handle Add Staff Submit ---
+  // --- Handle Add Staff Submit ---
   const handleAddStaff = async (e) => {
     e.preventDefault();
     setStaffLoading(true);
@@ -91,11 +92,18 @@ const AODashboard = () => {
         staffForm,
         {
           headers: { Authorization: `Bearer ${token}` },
-        },
+        }
       );
 
       setStaffMessage({ type: "success", text: data.message });
       setStaffForm({ name: "", email: "" }); // Clear form
+
+      // Refresh Staff List automatically
+      const { data: updatedStaff } = await axios.get(
+        "http://localhost:5000/api/ao/staff-list",
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setStaffList(updatedStaff);
 
       // Close modal after 2 seconds automatically
       setTimeout(() => {
@@ -109,6 +117,37 @@ const AODashboard = () => {
       });
     } finally {
       setStaffLoading(false);
+    }
+  };
+
+  // --- 🔥 NAYA: Handle Assign Ticket ---
+  const handleAssignTicket = async () => {
+    if (!selectedStaffId) {
+      alert("Please select staff first!");
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem("token");
+      await axios.put(
+        `http://localhost:5000/api/tickets/${selectedTicket._id}/assign`,
+        { staffId: selectedStaffId },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      // Modal band karo aur ID reset karo
+      setSelectedTicket(null);
+      setSelectedStaffId("");
+
+      // Table ko refresh karne ke liye wapas data mangwa lo
+      const { data: updatedTickets } = await axios.get(
+        "http://localhost:5000/api/tickets/all",
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setTickets(updatedTickets);
+    } catch (error) {
+      console.error("Error assigning ticket:", error);
+      alert("Error while assigning ticket. Please try again latter!");
     }
   };
 
@@ -155,7 +194,9 @@ const AODashboard = () => {
               {initial}
             </div>
             <div>
-              <p className="text-sm font-semibold truncate w-24">{userName}</p>
+              <p className="text-sm font-semibold truncate w-24">
+                {userName}
+              </p>
               <p className="text-xs text-emerald-400">AO Admin</p>
             </div>
           </div>
@@ -172,7 +213,6 @@ const AODashboard = () => {
       <main className="flex-1 p-8 overflow-y-auto">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-slate-800">Admin Dashboard</h1>
-          {/* 🔥 FIXED: Button ab Modal open karega */}
           <button
             onClick={() => setIsStaffModalOpen(true)}
             className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg font-medium shadow-sm transition"
@@ -291,7 +331,13 @@ const AODashboard = () => {
                       </td>
                       <td className="px-6 py-4">
                         <span
-                          className={`px-3 py-1 rounded-full text-xs font-medium ${ticket.status === "Open" ? "bg-amber-100 text-amber-700" : ticket.status === "Resolved" ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"}`}
+                          className={`px-3 py-1 rounded-full text-xs font-medium ${
+                            ticket.status === "Open"
+                              ? "bg-amber-100 text-amber-700"
+                              : ticket.status === "Resolved"
+                              ? "bg-emerald-100 text-emerald-700"
+                              : "bg-blue-100 text-blue-700"
+                          }`}
                         >
                           {ticket.status}
                         </span>
@@ -317,7 +363,7 @@ const AODashboard = () => {
       </main>
 
       {/* =========================================================
-          🔥 ADD STAFF MODAL (NEW)
+          🔥 ADD STAFF MODAL
       ========================================================= */}
       {isStaffModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
@@ -341,7 +387,11 @@ const AODashboard = () => {
             <div className="p-6">
               {staffMessage.text && (
                 <div
-                  className={`mb-4 p-3 rounded-lg flex items-center gap-2 text-sm border ${staffMessage.type === "error" ? "bg-red-50 border-red-200 text-red-600" : "bg-emerald-50 border-emerald-200 text-emerald-600"}`}
+                  className={`mb-4 p-3 rounded-lg flex items-center gap-2 text-sm border ${
+                    staffMessage.type === "error"
+                      ? "bg-red-50 border-red-200 text-red-600"
+                      : "bg-emerald-50 border-emerald-200 text-emerald-600"
+                  }`}
                 >
                   {staffMessage.type === "error" ? (
                     <AlertCircle size={16} />
@@ -423,12 +473,11 @@ const AODashboard = () => {
       )}
 
       {/* =========================================================
-          🔥 TICKET DETAILS MODAL (EXISTING)
+          🔥 TICKET DETAILS MODAL
       ========================================================= */}
       {selectedTicket && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            {/* ... (Pura purana Ticket Modal code yahan same to same hai, maine touch nahi kiya) ... */}
             <div className="bg-slate-50 border-b border-gray-100 p-6 flex justify-between items-center">
               <div>
                 <h2 className="text-xl font-bold text-slate-800">
@@ -484,7 +533,13 @@ const AODashboard = () => {
                     Status
                   </p>
                   <span
-                    className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${selectedTicket.status === "Open" ? "bg-amber-100 text-amber-700" : selectedTicket.status === "Resolved" ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"}`}
+                    className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${
+                      selectedTicket.status === "Open"
+                        ? "bg-amber-100 text-amber-700"
+                        : selectedTicket.status === "Resolved"
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-blue-100 text-blue-700"
+                    }`}
                   >
                     {selectedTicket.status}
                   </span>
@@ -513,16 +568,19 @@ const AODashboard = () => {
                 </div>
               </div>
             </div>
+            
+            {/* 🔥 FIXED: Assign Ticket Action Area */}
             <div className="bg-gray-50 border-t border-gray-100 p-6 flex justify-between items-center">
               <div className="flex-1 mr-4">
                 <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
                   Assign to Staff Member
                 </label>
-                <select className="w-full bg-white border border-gray-300 text-gray-700 py-2 px-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                <select 
+                  className="w-full bg-white border border-gray-300 text-gray-700 py-2 px-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  value={selectedStaffId}
+                  onChange={(e) => setSelectedStaffId(e.target.value)}
+                >
                   <option value="">-- Select Staff --</option>
-                  <option value="staff1">Rahul (IT Department)</option>
-                  <option value="staff2">Amit (Maintenance)</option>
-
                   {staffList.map((staff) => (
                     <option key={staff._id} value={staff._id}>
                       {staff.name}
@@ -531,11 +589,15 @@ const AODashboard = () => {
                 </select>
               </div>
               <div className="mt-6">
-                <button className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-6 rounded-lg transition-colors shadow-sm">
+                <button 
+                  onClick={handleAssignTicket}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-6 rounded-lg transition-colors shadow-sm"
+                >
                   Assign Ticket
                 </button>
               </div>
             </div>
+            
           </div>
         </div>
       )}

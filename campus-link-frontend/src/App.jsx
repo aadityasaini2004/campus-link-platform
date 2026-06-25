@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './pages/LoginPage.jsx';
 import AODashboard from './pages/AODasboard.jsx';
 import StudentDashboard from './pages/StudentDashboard.jsx';
+import StaffDashboard from './pages/StaffDashboard.jsx';
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
       
       {/* Student Dashboard Route */}
       <Route path="/student-dashboard" element={<StudentDashboard />} />
+      <Route path="/staff-dashboard" element={<StaffDashboard />} />
       
       {/* Aage chalkar hum yahan /faculty-dashboard bhi add karenge */}
     </Routes>

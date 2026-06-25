@@ -90,19 +90,72 @@ const getAllTickets = async (req, res) => {
         res.status(500).json({ message: 'Error fetching all tickets' });
     }
 };
-const assignTicket = async(req, res) => {
+
+const assignTicket = async (req, res) => {
     try {
-        const {staffId} = req.body;
-        const tickets = await Ticket.findByIdAndUpdate (
+        const { staffId } = req.body;
+        
+        if (!staffId) {
+            return res.status(400).json({ message: 'Staff ID is required' });
+        }
+
+        const ticket = await Ticket.findByIdAndUpdate(
             req.params.id,
-            {assignedTo: staffId, status: "Assigned"},
-            {new: true}
+            { assignedTo: staffId, status: 'Assigned' },
+            { new: true }
         );
 
-        res.status(200).json({message: "Ticket Assigned Successfully",ticket });
-    } catch (error) {
-        res.status(500).json({message: "Error assigning tickets", error});
-    }
-}
+        if (!ticket) {
+            return res.status(404).json({ message: 'Ticket not found' });
+        }
 
-module.exports = { createTicket, resolveTicket, getMyTickets, getAllTickets, assignTicket };
+        res.status(200).json({ message: 'Ticket assigned successfully!', ticket });
+    } catch (error) {
+        console.error('Backend Error assigning ticket:', error);
+        res.status(500).json({ message: 'Internal Server Error while assigning ticket' });
+    }
+};
+
+
+const getAssignedTickets = async (req, res) => {
+    try {
+        // Find tickets where assignedTo matches the logged-in staff's ID
+        const tickets = await Ticket.find({ assignedTo: req.user._id })
+            .populate('raisedBy', 'name email role')
+            .sort({ updatedAt: -1 }); 
+            
+        res.status(200).json(tickets);
+    } catch (error) {
+        console.error('Error fetching assigned tickets:', error);
+        res.status(500).json({ message: 'Error fetching assigned tickets' });
+    }
+};
+
+const updateTicketStatus = async (req, res) => {
+    try {
+        const { status } = req.body;
+        
+        // Ensure only valid statuses are saved
+        const validStatuses = ['Open', 'Assigned', 'Currently Working', 'Resolved'];
+        if (!validStatuses.includes(status)) {
+            return res.status(400).json({ message: 'Invalid status' });
+        }
+
+        const ticket = await Ticket.findByIdAndUpdate(
+            req.params.id,
+            { status: status },
+            { new: true }
+        );
+
+        if (!ticket) {
+            return res.status(404).json({ message: 'Ticket not found' });
+        }
+
+        res.status(200).json({ message: `Ticket status updated to ${status}`, ticket });
+    } catch (error) {
+        console.error('Error updating ticket status:', error);
+        res.status(500).json({ message: 'Internal Server Error while updating status' });
+    }
+};
+
+module.exports = { createTicket, resolveTicket, getMyTickets, getAllTickets, assignTicket, getAssignedTickets, updateTicketStatus };
