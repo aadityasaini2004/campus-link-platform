@@ -3,6 +3,7 @@ import LoginPage from './pages/LoginPage.jsx';
 import AODashboard from './pages/AODasboard.jsx';
 import StudentDashboard from './pages/StudentDashboard.jsx';
 import StaffDashboard from './pages/StaffDashboard.jsx';
+import FacultyDashboard from "./pages/FacultyDashboard.jsx"
 
 function App() {
   return (
@@ -18,9 +19,13 @@ function App() {
       
       {/* Student Dashboard Route */}
       <Route path="/student-dashboard" element={<StudentDashboard />} />
-      <Route path="/staff-dashboard" element={<StaffDashboard />} />
       
-      {/* Aage chalkar hum yahan /faculty-dashboard bhi add karenge */}
+      {/* Staff Dashboard */}
+      <Route path="/staff-dashboard" element={<StaffDashboard />} />
+
+      {/* Faculty Dashboard */}
+      <Route path="/faculty-dashboard" element={<FacultyDashboard />} />
+
     </Routes>
   );
 }

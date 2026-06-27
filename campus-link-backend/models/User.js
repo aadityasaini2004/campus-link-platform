@@ -16,6 +16,16 @@ const userSchema = new mongoose.Schema({
         required: true,
     },
 
+    twoFactorSecret: {
+        type: String,
+        default: null
+    },
+
+    is2FAEnabled: {
+        type: Boolean,
+        defult: false
+    },
+
     role: {
         type: String,
         enum: ['Student', 'Faculty', 'DepartmentStaff', 'AO'],

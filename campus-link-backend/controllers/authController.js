@@ -3,6 +3,8 @@ const OTP = require('../models/OTP');
 const generateToken = require('../utils/generateToken');
 const bcrypt = require('bcryptjs');
 const nodemailer = require('nodemailer');
+const speakeasy = require('speakeasy');
+const QRCode = require('qrcode');
 
 // Nodemailer Transporter Setup
 const transporter = nodemailer.createTransport({
@@ -121,6 +123,13 @@ const loginUser = async (req, res) => {
             return res.status(401).json({ message: 'Invalid credentials.' });
         }
 
+        if(user.is2FAEnabled) {
+            return res.status(200).json({
+                requires2FA: true,
+                email: user.email
+            });
+        }
+
         // Send Token
         res.status(200).json({
             _id: user._id,
@@ -136,4 +145,101 @@ const loginUser = async (req, res) => {
     }
 };
 
-module.exports = { sendOTP, registerUser, loginUser };
+const setup2FA = async (req, res) => {
+    try {
+        // 1. Generate a secure secret
+        const secret = speakeasy.generateSecret({
+            name: `CampusLink (${req.user.email})` // This name shows up in the Authenticator App
+        });
+
+        // 2. Save the secret to the user's database record temporarily
+        // We don't set is2FAEnabled to true yet, because they haven't verified it works!
+        await User.findByIdAndUpdate(req.user._id, {
+            twoFactorSecret: secret.base32
+        });
+
+        // 3. Generate a QR Code URL from the secret's otpauth_url
+        QRCode.toDataURL(secret.otpauth_url, (err, data_url) => {
+            if (err) {
+                return res.status(500).json({ message: 'Error generating QR code' });
+            }
+            
+            // Send the QR code image URL back to the frontend
+            res.status(200).json({
+                secret: secret.base32,
+                qrCode: data_url
+            });
+        });
+
+    } catch (error) {
+        console.error('2FA Setup Error:', error);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+};
+
+const verify2FASetup = async (req, res) => {
+    try {
+        const { token } = req.body;
+        const user = await User.findById(req.user._id);
+
+        // 🔥 FIX 1: Remove any hidden spaces from the token
+        const cleanToken = token.replace(/\s+/g, '');
+
+        const verified = speakeasy.totp.verify({
+            secret: user.twoFactorSecret,
+            encoding: 'base32',
+            token: cleanToken,
+            window: 1 // 🔥 FIX 2: Gives a +/- 30-second grace period!
+        });
+
+        if (verified) {
+            user.is2FAEnabled = true;
+            await user.save();
+            res.status(200).json({ message: '2FA has been successfully enabled!' });
+        } else {
+            res.status(400).json({ message: 'Invalid 6-digit code. Please try again.' });
+        }
+    } catch (error) {
+        console.error('2FA Verification Error:', error);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+};
+
+const verifyLogin2FA = async (req, res) => {
+    try {
+        const { email, token } = req.body;
+        const user = await User.findOne({ email });
+
+        if (!user || !user.is2FAEnabled) {
+            return res.status(400).json({ message: '2FA is not set up for this account.' });
+        }
+
+        // 🔥 FIX 1: Remove any hidden spaces
+        const cleanToken = token.replace(/\s+/g, '');
+
+        const verified = speakeasy.totp.verify({
+            secret: user.twoFactorSecret,
+            encoding: 'base32',
+            token: cleanToken,
+            window: 1 // 🔥 FIX 2: Grace period for login verification
+        });
+
+        if (verified) {
+            res.status(200).json({
+                _id: user._id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                token: generateToken(user._id) // Ensure generateToken exists here
+            });
+        } else {
+            res.status(400).json({ message: 'Invalid Authenticator code.' });
+        }
+    } catch (error) {
+        console.error('Login 2FA Error:', error);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+};
+
+
+module.exports = { sendOTP, registerUser, loginUser, setup2FA, verify2FASetup, verifyLogin2FA };

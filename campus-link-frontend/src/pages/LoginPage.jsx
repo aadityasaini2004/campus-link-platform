@@ -9,6 +9,7 @@ const LoginPage = () => {
   // UI States
   const [isLoginMode, setIsLoginMode] = useState(true);
   const [registerStep, setRegisterStep] = useState(1); // Step 1: Email, Step 2: OTP & Password
+  const [is2FAVerificationMode, setIs2FAVerificationMode] = useState(false); // 🔥 NEW: 2FA State
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' }); // type: 'error' or 'success'
 
@@ -17,7 +18,8 @@ const LoginPage = () => {
     name: '',
     email: '',
     password: '',
-    otp: ''
+    otp: '',
+    twoFactorCode: '' // 🔥 NEW: 2FA Code
   });
 
   const handleChange = (e) => {
@@ -36,7 +38,7 @@ const LoginPage = () => {
     try {
       const { data } = await axios.post('http://localhost:5000/api/auth/send-otp', { email: formData.email });
       showMessage('success', data.message);
-      setRegisterStep(2); // Move to OTP and Password entry
+      setRegisterStep(2);
     } catch (err) {
       showMessage('error', err.response?.data?.message || 'Failed to send OTP.');
     } finally {
@@ -51,7 +53,6 @@ const LoginPage = () => {
     try {
       const { data } = await axios.post('http://localhost:5000/api/auth/register', formData);
       
-      // Save Token & Route
       localStorage.setItem('token', data.token);
       localStorage.setItem('userRole', data.role);
       localStorage.setItem('userName', data.name);
@@ -64,7 +65,7 @@ const LoginPage = () => {
     }
   };
 
-  // --- 3. LOGIN ---
+  // --- 3. LOGIN (Modified for 2FA Intercept) ---
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -74,14 +75,43 @@ const LoginPage = () => {
         password: formData.password 
       });
       
-      // Save Token & Route
+      // 🔥 NEW: Check if backend says 2FA is required
+      if (data.requires2FA) {
+        setIs2FAVerificationMode(true); // Switch UI to ask for 2FA code
+        showMessage('success', 'Please enter your Authenticator code.');
+      } else {
+        // Standard login (no 2FA)
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('userRole', data.role);
+        localStorage.setItem('userName', data.name);
+        
+        routeUser(data.role);
+      }
+    } catch (err) {
+      showMessage('error', err.response?.data?.message || 'Invalid credentials.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // --- 4. VERIFY 2FA LOGIN ---
+  const handleVerify2FALogin = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const { data } = await axios.post('http://localhost:5000/api/auth/verify-login-2fa', { 
+        email: formData.email, 
+        token: formData.twoFactorCode // Send the 6-digit code
+      });
+      
+      // Successfully verified 2FA! Save tokens and route.
       localStorage.setItem('token', data.token);
       localStorage.setItem('userRole', data.role);
       localStorage.setItem('userName', data.name);
       
       routeUser(data.role);
     } catch (err) {
-      showMessage('error', err.response?.data?.message || 'Invalid credentials.');
+      showMessage('error', err.response?.data?.message || 'Invalid Authenticator Code.');
     } finally {
       setLoading(false);
     }
@@ -92,12 +122,10 @@ const LoginPage = () => {
     if (role === 'AO') {
       navigate('/ao-dashboard');
     } else if (role === 'DepartmentStaff') {
-      // 🔥 NEW: Route added for Department Staff
       navigate('/staff-dashboard');
     } else if (role === 'Faculty') {
       navigate('/faculty-dashboard');
     } else {
-      // Default to Student Dashboard
       navigate('/student-dashboard');
     }
   };
@@ -113,21 +141,23 @@ const LoginPage = () => {
         <h1 className="text-3xl font-bold text-center text-white mb-2 tracking-wide">Campus Link</h1>
         <p className="text-center text-slate-400 mb-6">Centralized Issue Management</p>
 
-        {/* Tab Switcher */}
-        <div className="flex bg-slate-900 rounded-lg p-1 mb-6 border border-slate-700">
-          <button 
-            onClick={() => { setIsLoginMode(true); setRegisterStep(1); setMessage({type:'', text:''}); }}
-            className={`flex-1 py-2 rounded-md font-medium transition-all ${isLoginMode ? 'bg-slate-700 text-emerald-400 shadow' : 'text-slate-400 hover:text-slate-200'}`}
-          >
-            Login
-          </button>
-          <button 
-            onClick={() => { setIsLoginMode(false); setMessage({type:'', text:''}); }}
-            className={`flex-1 py-2 rounded-md font-medium transition-all ${!isLoginMode ? 'bg-slate-700 text-emerald-400 shadow' : 'text-slate-400 hover:text-slate-200'}`}
-          >
-            Sign Up
-          </button>
-        </div>
+        {/* Tab Switcher (Only show if NOT in 2FA mode) */}
+        {!is2FAVerificationMode && (
+          <div className="flex bg-slate-900 rounded-lg p-1 mb-6 border border-slate-700">
+            <button 
+              onClick={() => { setIsLoginMode(true); setRegisterStep(1); setMessage({type:'', text:''}); }}
+              className={`flex-1 py-2 rounded-md font-medium transition-all ${isLoginMode ? 'bg-slate-700 text-emerald-400 shadow' : 'text-slate-400 hover:text-slate-200'}`}
+            >
+              Login
+            </button>
+            <button 
+              onClick={() => { setIsLoginMode(false); setMessage({type:'', text:''}); }}
+              className={`flex-1 py-2 rounded-md font-medium transition-all ${!isLoginMode ? 'bg-slate-700 text-emerald-400 shadow' : 'text-slate-400 hover:text-slate-200'}`}
+            >
+              Sign Up
+            </button>
+          </div>
+        )}
 
         {/* Status Messages */}
         {message.text && (
@@ -137,8 +167,28 @@ const LoginPage = () => {
           </div>
         )}
 
-        {/* ================= LOGIN FORM ================= */}
-        {isLoginMode ? (
+        {/* ================= 2FA VERIFICATION FORM ================= */}
+        {is2FAVerificationMode ? (
+          <form onSubmit={handleVerify2FALogin} className="space-y-4">
+             <div className="text-center mb-4">
+               <Lock className="mx-auto text-emerald-500 mb-2" size={32}/>
+               <p className="text-sm text-slate-300">Enter the 6-digit code from your Authenticator App to continue.</p>
+             </div>
+             <div className="relative">
+              <Key className="absolute left-3 top-3 text-slate-400" size={20} />
+              <input type="text" name="twoFactorCode" value={formData.twoFactorCode} onChange={handleChange} required placeholder="000000" maxLength="6"
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg py-3 pl-10 pr-4 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-center text-2xl tracking-[0.5em] transition-all placeholder:text-slate-500" />
+            </div>
+            <button type="submit" disabled={loading} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-4 rounded-lg transition-all transform hover:scale-[1.02] active:scale-95 disabled:opacity-50">
+              {loading ? 'Verifying...' : 'Verify Secure Login'}
+            </button>
+            <button type="button" onClick={() => setIs2FAVerificationMode(false)} className="w-full text-sm text-slate-400 hover:text-slate-200 mt-2">
+              Cancel & Go Back
+            </button>
+          </form>
+
+        ) : isLoginMode ? (
+          /* ================= STANDARD LOGIN FORM ================= */
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="relative">
               <Mail className="absolute left-3 top-3 text-slate-400" size={20} />
@@ -156,20 +206,18 @@ const LoginPage = () => {
           </form>
 
         ) : (
-          /* ================= REGISTER FORM ================= */
+          /* ================= REGISTER FORM (Remains Unchanged) ================= */
           <div className="space-y-4">
-            
-            {/* Step 1: Send OTP */}
             {registerStep === 1 ? (
               <form onSubmit={handleSendOTP} className="space-y-4">
-                <div className="relative">
+                 <div className="relative">
                   <User className="absolute left-3 top-3 text-slate-400" size={20} />
                   <input type="text" name="name" value={formData.name} onChange={handleChange} required placeholder="Full Name"
                     className="w-full bg-slate-900 border border-slate-700 rounded-lg py-3 pl-10 pr-4 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all placeholder:text-slate-500" />
                 </div>
                 <div className="relative">
                   <Mail className="absolute left-3 top-3 text-slate-400" size={20} />
-                  <input type="email" name="email" value={formData.email} onChange={handleChange} required placeholder="University Email (@krmu.edu.in)"
+                  <input type="email" name="email" value={formData.email} onChange={handleChange} required placeholder="University Email (@krmangalam.edu.in)"
                     className="w-full bg-slate-900 border border-slate-700 rounded-lg py-3 pl-10 pr-4 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all placeholder:text-slate-500" />
                 </div>
                 <button type="submit" disabled={loading} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-4 rounded-lg transition-all transform hover:scale-[1.02] active:scale-95 disabled:opacity-50">
@@ -177,8 +225,6 @@ const LoginPage = () => {
                 </button>
               </form>
             ) : (
-              
-            /* Step 2: Verify OTP & Setup Password */
               <form onSubmit={handleRegister} className="space-y-4">
                 <p className="text-sm text-emerald-400 text-center mb-2">OTP sent to {formData.email}</p>
                 <div className="relative">

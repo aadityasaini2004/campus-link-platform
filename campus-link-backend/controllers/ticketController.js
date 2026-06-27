@@ -80,7 +80,7 @@ const getAllTickets = async (req, res) => {
     try {
         // 🔥 NAYA: .populate() add kiya taaki ID ki jagah poori User info mile
         const tickets = await Ticket.find()
-            .populate('raisedBy', 'name email') 
+            .populate('raisedBy', 'name email role') 
             .sort({ createdAt: -1 })
             .exec();
             
